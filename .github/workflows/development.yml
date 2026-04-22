@@ -19,22 +19,25 @@ jobs:
           - platform: 2
             platform_name: ios
     
-    runs-on: J316sAP
+    runs-on: macos-14
     steps:
-      - name: Remove work folders
-        run: |
-          echo "before"
-          ls -lah ./
-          rm -rf ./* || true
-          rm -rf ./.??* || true
-          echo "after"
-          ls -lah ./
-          
       - name: Checkout repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Checkout repository submodules
-        run: git submodule update --init --recursive
+      - name: Setup JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Install dependencies
+        run: |
+          brew install ldid wget
+
+      - name: Set SDKPATH
+        run: echo "SDKPATH=$(xcrun --sdk iphoneos --show-sdk-path)" >> $GITHUB_ENV
 
       - name: Get gl4es latest commit hash
         id: gl4es-sha
@@ -85,14 +88,14 @@ jobs:
           export SLIMMED=1
           if [ "${{ matrix.platform_name }}" == "ios" ]; then
             # Build ipa and tipa for iOS
-            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
-            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
+            make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
+            make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
           elif [ "${{ matrix.platform_name }}" == "tvos" ]; then
             # Build tipa only for tvOS
-            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
+            make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
           else
             # Build ipa only for everything else
-            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
+            make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
           fi
 
       - name: Upload regular ipa
