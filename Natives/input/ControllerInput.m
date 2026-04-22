@@ -6,7 +6,7 @@
 
 #include "../glfw_keycodes.h"
 
-// Left thumbstick directions
+// Left thumbstick directions (legacy mode)
 #define DIRECTION_EAST 0
 #define DIRECTION_NORTH_EAST 1
 //#define DIRECTION_NORTH 2
@@ -25,16 +25,28 @@ CGFloat lastYValue; // lastVerticalValue
 
 NSMutableDictionary *gameMap, *menuMap;
 BOOL leftShiftHeld;
+BOOL passthroughMode;
 
 + (void)initKeycodeTable {
+    // Check if gamepad passthrough buffers are available
+    extern float *gamepadAxesPtr;
+    extern unsigned char *gamepadButtonsPtr;
+    passthroughMode = (gamepadAxesPtr != NULL && gamepadButtonsPtr != NULL);
+
+    if (passthroughMode) {
+        NSLog(@"[ControllerInput] Gamepad passthrough mode enabled");
+        return;
+    }
+
+    // Legacy mode: load JSON key mapping
     if (gameMap && menuMap) {
         return;
     }
-    
+
     NSString *controlFile = [PLProfiles resolveKeyForCurrentProfile:@"defaultGamepadCtrl"];
     NSString *gamepadPath = [NSString stringWithFormat:@"%s/controlmap/gamepads/%@", getenv("POJAV_HOME"), controlFile];
     NSMutableDictionary *gamepadJSON = parseJSONFromFile(gamepadPath);
-    
+
     gameMap = gamepadJSON[@"mGameMappingList"];
     menuMap = gamepadJSON[@"mMenuMappingList"];
 }
@@ -47,7 +59,7 @@ BOOL leftShiftHeld;
     } else {
         mapping = menuMap;
     }
-    
+
     for (NSMutableDictionary *buttonDict in mapping) {
         if(controllerKeycode == [buttonDict[@"gamepad_button"] intValue]) {
             keycode = [buttonDict[@"keycode"] intValue];
@@ -88,9 +100,91 @@ BOOL leftShiftHeld;
     }
 }
 
-+ (void)registerControllerCallbacks:(GCController *)controller {
-    GCExtendedGamepad *gamepad = controller.extendedGamepad;
++ (void)registerPassthroughCallbacks:(GCExtendedGamepad *)gamepad {
+    extern float *gamepadAxesPtr;
+    extern unsigned char *gamepadButtonsPtr;
 
+    // Set connected flag (byte 15)
+    gamepadButtonsPtr[15] = 1;
+
+    // Face buttons
+    gamepad.buttonA.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_A] = pressed ? 1 : 0;
+    };
+    gamepad.buttonB.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_B] = pressed ? 1 : 0;
+    };
+    gamepad.buttonX.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_X] = pressed ? 1 : 0;
+    };
+    gamepad.buttonY.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_Y] = pressed ? 1 : 0;
+    };
+
+    // Shoulders
+    gamepad.leftShoulder.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] = pressed ? 1 : 0;
+    };
+    gamepad.rightShoulder.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] = pressed ? 1 : 0;
+    };
+
+    // Menu buttons
+    gamepad.buttonOptions.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_BACK] = pressed ? 1 : 0;
+    };
+    gamepad.buttonMenu.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_START] = pressed ? 1 : 0;
+    };
+    gamepad.buttonHome.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_GUIDE] = pressed ? 1 : 0;
+    };
+
+    // D-Pad
+    gamepad.dpad.up.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_DPAD_UP] = pressed ? 1 : 0;
+    };
+    gamepad.dpad.right.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] = pressed ? 1 : 0;
+    };
+    gamepad.dpad.down.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] = pressed ? 1 : 0;
+    };
+    gamepad.dpad.left.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] = pressed ? 1 : 0;
+    };
+
+    // Thumbstick buttons
+    gamepad.leftThumbstickButton.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] = pressed ? 1 : 0;
+    };
+    gamepad.rightThumbstickButton.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadButtonsPtr[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] = pressed ? 1 : 0;
+    };
+
+    // Thumbstick axes
+    // iOS: Y positive = up; GLFW: Y positive = down → negate Y
+    gamepad.leftThumbstick.valueChangedHandler = ^(GCControllerDirectionPad *dpad, float xValue, float yValue) {
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_LEFT_X] = xValue;
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_LEFT_Y] = -yValue;
+    };
+    gamepad.rightThumbstick.valueChangedHandler = ^(GCControllerDirectionPad *dpad, float xValue, float yValue) {
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_RIGHT_X] = xValue;
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_RIGHT_Y] = -yValue;
+    };
+
+    // Trigger axes (analog)
+    // iOS: 0.0 (released) to 1.0 (pressed)
+    // GLFW: -1.0 (released) to 1.0 (pressed)
+    gamepad.leftTrigger.valueChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] = value * 2.0f - 1.0f;
+    };
+    gamepad.rightTrigger.valueChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
+        gamepadAxesPtr[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] = value * 2.0f - 1.0f;
+    };
+}
+
++ (void)registerLegacyCallbacks:(GCExtendedGamepad *)gamepad {
     gamepad.leftShoulder.pressedChangedHandler = ^(GCControllerButtonInput *button, float value, BOOL pressed) {
         [self sendKeyEvent:GLFW_GAMEPAD_BUTTON_LEFT_BUMPER pressed:pressed];
     };
@@ -192,10 +286,23 @@ BOOL leftShiftHeld;
     };
 }
 
++ (void)registerControllerCallbacks:(GCController *)controller {
+    GCExtendedGamepad *gamepad = controller.extendedGamepad;
+
+    if (passthroughMode) {
+        [self registerPassthroughCallbacks:gamepad];
+    } else {
+        [self registerLegacyCallbacks:gamepad];
+    }
+}
+
 /**
- * Send the new mouse position, computing the delta
+ * Send the new mouse position, computing the delta (legacy mode only)
  */
 + (void)tick {
+    // In passthrough mode, the Java mod handles stick input directly
+    if (passthroughMode) return;
+
     // There isn't a convenient way to get ns, use ms at this point
     CGFloat frameTime = CACurrentMediaTime();
     // GameController automatically performs deadzone calculations
@@ -218,11 +325,25 @@ BOOL leftShiftHeld;
 }
 
 + (void)unregisterControllerCallbacks:(GCController *)controller {
+    // Clear connected flag if in passthrough mode
+    if (passthroughMode) {
+        extern unsigned char *gamepadButtonsPtr;
+        if (gamepadButtonsPtr != NULL) {
+            memset(gamepadButtonsPtr, 0, 16); // clear all buttons + connected flag
+        }
+        extern float *gamepadAxesPtr;
+        if (gamepadAxesPtr != NULL) {
+            memset(gamepadAxesPtr, 0, 6 * sizeof(float)); // zero all axes
+        }
+    }
+
     GCExtendedGamepad *gamepad = controller.extendedGamepad;
     gamepad.leftShoulder.pressedChangedHandler = nil;
     gamepad.rightShoulder.pressedChangedHandler = nil;
     gamepad.leftTrigger.pressedChangedHandler = nil;
+    gamepad.leftTrigger.valueChangedHandler = nil;
     gamepad.rightTrigger.pressedChangedHandler = nil;
+    gamepad.rightTrigger.valueChangedHandler = nil;
     gamepad.buttonOptions.pressedChangedHandler = nil;
     gamepad.buttonMenu.pressedChangedHandler = nil;
     gamepad.buttonHome.pressedChangedHandler = nil;

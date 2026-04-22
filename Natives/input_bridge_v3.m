@@ -214,6 +214,15 @@ void JNI_OnLoadGLFW() {
     jfieldID field_keyDownBuffer = (*runtimeJNIEnvPtr)->GetStaticFieldID(runtimeJNIEnvPtr, vmGlfwClass, "keyDownBuffer", "Ljava/nio/ByteBuffer;");
     jobject keyDownBufferJ = (*runtimeJNIEnvPtr)->GetStaticObjectField(runtimeJNIEnvPtr, vmGlfwClass, field_keyDownBuffer);
     keyDownBuffer = (*runtimeJNIEnvPtr)->GetDirectBufferAddress(runtimeJNIEnvPtr, keyDownBufferJ);
+
+    // Gamepad passthrough: get direct buffer addresses for axes and buttons
+    jfieldID field_gamepadAxesRaw = (*runtimeJNIEnvPtr)->GetStaticFieldID(runtimeJNIEnvPtr, vmGlfwClass, "gamepadAxesRaw", "Ljava/nio/ByteBuffer;");
+    jobject axesObj = (*runtimeJNIEnvPtr)->GetStaticObjectField(runtimeJNIEnvPtr, vmGlfwClass, field_gamepadAxesRaw);
+    gamepadAxesPtr = (float *)(*runtimeJNIEnvPtr)->GetDirectBufferAddress(runtimeJNIEnvPtr, axesObj);
+
+    jfieldID field_gamepadButtonsRaw = (*runtimeJNIEnvPtr)->GetStaticFieldID(runtimeJNIEnvPtr, vmGlfwClass, "gamepadButtonsRaw", "Ljava/nio/ByteBuffer;");
+    jobject buttonsObj = (*runtimeJNIEnvPtr)->GetStaticObjectField(runtimeJNIEnvPtr, vmGlfwClass, field_gamepadButtonsRaw);
+    gamepadButtonsPtr = (unsigned char *)(*runtimeJNIEnvPtr)->GetDirectBufferAddress(runtimeJNIEnvPtr, buttonsObj);
 }
 
 jint JNI_OnLoad(JavaVM* vm, void* reserved) {

@@ -30,6 +30,24 @@ import sun.misc.Unsafe;
 
 public class GLFW
 {
+    // Gamepad passthrough: direct buffers written by native ControllerInput code
+    // gamepadAxesRaw: 6 floats = 24 bytes (LX, LY, RX, RY, LT, RT)
+    // gamepadButtonsRaw: 16 bytes (15 GLFW buttons + 1 connected flag at index 15)
+    private static final ByteBuffer gamepadAxesRaw = ByteBuffer.allocateDirect(6 * 4).order(ByteOrder.nativeOrder());
+    private static final ByteBuffer gamepadButtonsRaw = ByteBuffer.allocateDirect(16);
+    private static final FloatBuffer gamepadAxes = gamepadAxesRaw.asFloatBuffer();
+    private static final ByteBuffer gamepadButtons;
+    static {
+        gamepadButtonsRaw.limit(15);
+        gamepadButtons = gamepadButtonsRaw.slice();
+        gamepadButtonsRaw.clear();
+    }
+
+    private static boolean isGamepadPassthrough() {
+        return gamepadButtonsRaw.get(15) != 0;
+    }
+
+    // Legacy empty buffers (returned when passthrough is inactive)
     static FloatBuffer joystickData = (FloatBuffer)FloatBuffer.allocate(8).flip();
     static ByteBuffer buttonData = (ByteBuffer)ByteBuffer.allocate(8).flip();
     /** The major version number of the GLFW library. This is incremented when the API is changed in non-compatible ways. */
@@ -1177,16 +1195,24 @@ public class GLFW
     }
     public static String glfwGetJoystickName(int jid) {
         if(jid == 0) {
-            return "AIC event bus controller";
+            return isGamepadPassthrough() ? "Backbone One" : "AIC event bus controller";
         }else return null;
     }
     public static FloatBuffer glfwGetJoystickAxes(int jid) {
         if(jid == 0) {
+            if (isGamepadPassthrough()) {
+                gamepadAxes.position(0);
+                return gamepadAxes;
+            }
             return joystickData;
         }else return null;
     }
     public static ByteBuffer glfwGetJoystickButtons(int jid) {
         if(jid == 0) {
+            if (isGamepadPassthrough()) {
+                gamepadButtons.position(0);
+                return gamepadButtons;
+            }
             return buttonData;
         }else return null;
     }
@@ -1211,10 +1237,20 @@ public class GLFW
         return false;
     }
     public static String glfwGetGamepadName(int jid) {
+        if(jid == 0 && isGamepadPassthrough()) return "Backbone One";
         return "Unknown";
     }
     public static boolean glfwGetGamepadState(int jid, GLFWGamepadState state) {
-        return false;
+        if (jid != 0 || !isGamepadPassthrough()) return false;
+        try {
+            ByteBuffer btns = state.buttons();
+            FloatBuffer axs = state.axes();
+            for (int i = 0; i < 15; i++) btns.put(i, gamepadButtons.get(i));
+            for (int i = 0; i < 6; i++) axs.put(i, gamepadAxes.get(i));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Array version of: {@link #glfwGetVersion GetVersion} */

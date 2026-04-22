@@ -79,4 +79,10 @@ float resolutionScale;
 BOOL virtualMouseEnabled, isControlModifiable;
 uint64_t hwRedirectOrig[6], hwRedirectTarget[6];
 
+// Gamepad passthrough: pointers into Java direct ByteBuffers
+// gamepadAxesPtr: 6 floats (LX, LY, RX, RY, LT, RT)
+// gamepadButtonsPtr: 16 bytes (15 buttons + 1 connected flag at index 15)
+float *gamepadAxesPtr;
+unsigned char *gamepadButtonsPtr;
+
 #endif //POJAVLAUNCHER_ENVIRON_H

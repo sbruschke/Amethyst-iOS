@@ -1,0 +1,58 @@
+name: Build Gamepad Passthrough
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Install dependencies
+        run: |
+          brew install ldid wget
+
+      - name: Set SDKPATH
+        run: echo "SDKPATH=$(xcrun --sdk iphoneos --show-sdk-path)" >> $GITHUB_ENV
+
+      - name: Build IPA
+        run: |
+          export SLIMMED=1
+          make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=2
+          make -j$(sysctl -n hw.ncpu) dsym package PLATFORM=2 TROLLSTORE_JIT_ENT=1
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-gamepad-passthrough.ipa
+          path: artifacts/org.angelauramc.amethyst-*-ios.ipa
+
+      - name: Upload TrollStore TIPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-gamepad-passthrough-trollstore.tipa
+          path: artifacts/org.angelauramc.amethyst-*-ios-trollstore.tipa
+
+      - name: Upload Slimmed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-gamepad-passthrough-slimmed.ipa
+          path: artifacts/org.angelauramc.amethyst.slimmed-*-ios.ipa
+
+      - name: Upload Slimmed TrollStore TIPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-gamepad-passthrough-slimmed-trollstore.tipa
+          path: artifacts/org.angelauramc.amethyst.slimmed-*-ios-trollstore.tipa
